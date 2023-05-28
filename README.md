@@ -171,9 +171,423 @@ Dieses  Klassendiagramm zeigt die Beziehungen zwischen verschiedenen Klassen im 
 
 Die Beziehungen zwischen den Klassen sind durch die Linien dargestellt, wobei die Pfeilspitze die Richtung der Abhängigkeit anzeigt. Die gestrichelte Linie zwischen OrderRestController und ExceptionRestController bedeutet, dass OrderRestController die ExceptionRestController Klasse verwendet.
 
-Sehen wir uns nun die Ports and Adapters Architektur der Anwendung an:
+Sehen wir uns nun die Ports and Adapters Architektur der Anwendung anhand des "customermanagement"-Packages an:
+
+![PortsAndAdapters](pics/PortsAndAdapters.jpg)
+
+Die Ports, die meist nur Interfaces sind (im Bild mit Grün markiert), des Packages "customermanagement" sind im Package "ports" zu finden. Diese unterscheiden sich in "Türen", die hinein führen und "Türen", die hinausführen. Die Ausimplementierungen (im Bild mit Gelb markiert), sind in anderen Packages zu finden. Die Funktionen werden dann jeweils über die Interfaces aufgerufen.
+
+DDD-Bestandteile
+
+Jetzt werden die einzelnen Bestandteile des DDD im Package "ordermanagement" aufgelistet:
+In der gegebenen Paketstruktur sind die wesentlichen Komponenten und Prinzipien von Domain-Driven Design (DDD) wie folgt repräsentiert:
+
+- Domain Layer: Das domain-Paket repräsentiert den Domain Layer. Es enthält alle Entitäten, Wertobjekte und Domänenevents, die die Kerngeschäftslogik und -regeln der Anwendung darstellen.
+
+- Entities: Die Klasse Order repräsentiert eine Entität.
+    - Value Objects: Klassen wie Amount, Email, MonetaryAmount, Name, OrderID, OrderPosition, Percentage, und ProductNumber repräsentieren Value Objects.
+
+        ![ValueObjects](pics/ValueObjects.jpg)
+    - Domain Events: Klassen wie OrderPackageEvent, OrderPaymentValidatedEvent, OrderPlacedEvent, und OrderStateChangedEvent repräsentieren Domain Events.
+
+        ![DomainEvents](pics/DomainEvents.jpg)
+    - Application Layer: Das services-Paket repräsentiert den Application Layer. Hier befinden sich Anwendungsdienste wie OrderCommandServiceImpl und OrderQueryServiceImpl, die die Interaktion zwischen den Infrastruktur-, Domänen- und UI-Layern orchestrieren.
+
+        ![Services](pics/Services.jpg)
+
+- Infrastructure Layer: Die db- und messaging.spring-Pakete repräsentieren den Infrastructure Layer. Sie beinhalten die Klassen, die sich mit der Persistenz (wie OrderJPARepository, OrderRepositoryImpl, OrderDbEntity usw.) und der Kommunikation mit anderen Systemen (wie OrderOutgoingSpringMessageReplayImpl und IncomingOrderPackedSpringEventHandler) befassen.
+
+    ![MessagingSpring](pics/Messaging.jpg)
+    ![DB](pics/db.jpg)
+
+- Interfaces (Ports): Die ports-Pakete repräsentieren die verschiedenen Ports in DDD. Die in-Interfaces definieren die Funktionalitäten, die für eingehende Anfragen erforderlich sind, während die out-Interfaces die Funktionalitäten definieren, die für ausgehende Anfragen benötigt werden.
+
+    ![Ports](pics/Ports.jpg)
+    ![PortsAufrufe](pics/PortsAufruf.jpg)
+
+- Adapters: Die Ausimplementierungen der Interfaces im Package "ports" repräsentieren die Adapter in DDD. Diese sind verantwortlich für die Kommunikation zwischen der Anwendung und externen Diensten oder Nutzern.
+
+    ![Adapters](pics/Adapters.jpg)
+
+- Repositories: In DDD sind Repositories verantwortlich für den Zugriff auf Daten. Hier sind das OrderJPARepository-Interface und seine Implementierung OrderRepositoryImpl zu finden.
+
+````java
+@RepositoryMarker
+@Repository
+class OrderRepositoryImpl implements OrderRepository {
+
+    @Autowired
+    private OrderJPARepository orderJPARepository;
+
+    @Override
+    public Optional<Order> insert(Order order) {
+        if (order == null) throw new IllegalArgumentException("Order to be inserted must not be null!");
+        OrderDbEntity orderDbEntity = DbOrderMapperService.toOrm(order);
+        OrderDbEntity insertedEntity = orderJPARepository.save(orderDbEntity);
+        if (insertedEntity == null) return Optional.empty();
+        return Optional.of(DbOrderMapperService.toDomain(insertedEntity));
+    }
+
+    @Override
+    public Optional<Order> getById(OrderID id) {
+        if (id == null) throw new IllegalArgumentException("OrderID for Order to get from db must not be null!");
+        Optional<OrderDbEntity> orderEntityOptional = this.orderJPARepository.findById(id.id());
+        if (!orderEntityOptional.isPresent()) return Optional.empty();
+        return Optional.of(DbOrderMapperService.toDomain(orderEntityOptional.get()));
+    }
+
+    @Override
+    public List<Order> getAll() {
+        List<OrderDbEntity> list = this.orderJPARepository.findAll();
+        if (list == null) return Collections.emptyList();
+        return list.stream().map(dbEntity -> DbOrderMapperService.toDomain(dbEntity)).toList();
+    }
 
 
+    @Override
+    public void deleteById(OrderID id) {
+        this.orderJPARepository.deleteById(id.id());
+    }
+
+    @Override
+    public List<Order> getAllSortedAndPaged(int page, int pageSize, String sortedBy) {
+        Pageable sortedAndPagedOrders = PageRequest.of(page, pageSize, Sort.by(sortedBy));
+        Page<OrderDbEntity> resultPage = this.orderJPARepository.findAll(sortedAndPagedOrders);
+        if (resultPage.isEmpty()) return Collections.emptyList();
+        return resultPage.stream().map(dbEntity -> DbOrderMapperService.toDomain(dbEntity)).toList();
+    }
+
+    @Override
+    public void updateOrderWithNewState(Order order) { //first read the order, then change the entity object, then persist the order with save-call (transaction management included)
+        Optional<OrderDbEntity> optOrderDbEntity = this.orderJPARepository.findById(order.getOrderID().id());
+        if (optOrderDbEntity.isPresent()) {
+            OrderDbEntity orderDbEntity = optOrderDbEntity.get();
+            orderDbEntity.setState(order.getState());//set state
+            //further field could be updated if necessary (in further methods or in one Method containing all changes)
+            this.orderJPARepository.save(orderDbEntity);
+        }
+
+    }
+}
+````
+
+- Aggregates: In dieser Codebasis könnte das Order-Objekt und alle mit ihm verbundenen Objekte als ein Aggregat betrachtet werden, obwohl das aus dem gegebenen Code nicht klar hervorgeht, da die genaue Organisation von Aggregaten von der spezifischen Geschäftslogik abhängt.
+
+````java
+@AggregateMarker
+public final class Order {
+
+    //ID
+    private final OrderID orderID;
+
+    //Customer-Data
+    private CustomerData customerData;
+
+    //Line-Items
+    private final List<LineItem> lineItems;
+
+    //Order-State and calcuated values
+    private OrderState state;
+    private final MonetaryAmount taxTotal;
+    private final MonetaryAmount netTotal;
+    private final MonetaryAmount grossTotal;
+    private final LocalDateTime date;
+
+    public Order(OrderID orderID, CustomerData customerData,
+                 LocalDateTime date, List<LineItem> lineItems, OrderState status) {
+        if (orderID == null) throw new IllegalArgumentException("OrderID must not be null!");
+        this.orderID = orderID;
+        if (customerData == null)
+            throw new IllegalArgumentException("Customer-Data for order invalid!");
+        this.customerData = customerData;
+        if (lineItems == null)
+            throw new IllegalArgumentException("LineItems-List must not be null, at least an empy List is needed!");
+        this.lineItems = lineItems;
+        if (status == null) throw new IllegalArgumentException("State must not be null!");
+        this.state = status;
+        this.taxTotal = this.calculateOrderTax();
+        this.netTotal = this.calculateOrderNetTotal();
+        this.grossTotal = this.calculateOrderGrossTotal();
+        this.date = date;
+    }
+
+    public List<LineItem> getLineItems() {
+        return Collections.unmodifiableList(this.lineItems);
+    }
+
+    public void orderStateTransitionTo(OrderState newState) {
+        switch (newState) {
+            case CANCELED -> {
+                if (this.state == OrderState.IN_DELIVERY || this.state == OrderState.DELIVERED)
+                    throw new OrderStateChangeNotPossibleException("Order in State " + this.state + " cannot be canceled");
+                this.state = newState;
+            }
+            case PAYMENT_VERIFIED -> {
+                if (this.state != OrderState.PLACED)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state PLACED for transition to PAYMENT VERIFIED!");
+                this.state = newState;
+            }
+            case PREPARING_FOR_DELIVERY -> {
+                if (this.state != OrderState.PAYMENT_VERIFIED)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state PAYMENT VERIFED for transition to PREPARING FOR DELIVERY!");
+                this.state = newState;
+            }
+            case IN_DELIVERY -> {
+                if (this.state != OrderState.PREPARING_FOR_DELIVERY)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state PREPARING FOR DELIVERY for transition to IN DELIVERY!");
+                this.state = newState;
+            }
+            case DELIVERED -> {
+                if (this.state != OrderState.IN_DELIVERY)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state IN DELIVERY for transition to DELIVERED!");
+                this.state = newState;
+            }
+        }
+    }
+
+    private MonetaryAmount calculateOrderTax() {
+        MonetaryAmount orderTax = new MonetaryAmount(new BigDecimal(0));
+        for (LineItem lineItem : this.lineItems) {
+
+            orderTax = orderTax.add(lineItem.getTotalTaxLine());
+        }
+        return orderTax;
+    }
+
+    private MonetaryAmount calculateOrderNetTotal() {
+        MonetaryAmount orderNetSum = new MonetaryAmount(new BigDecimal(0));
+        for (LineItem lineItem : this.lineItems) {
+            orderNetSum = orderNetSum.add(lineItem.getTotalNetLine());
+        }
+        return orderNetSum;
+    }
+
+    private MonetaryAmount calculateOrderGrossTotal() {
+        return this.netTotal.add(this.taxTotal);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Order)) return false;
+
+        Order order = (Order) o;
+
+        return getOrderID().equals(order.getOrderID());
+    }
+
+    @Override
+    public int hashCode() {
+        return getOrderID().hashCode();
+    }
+
+
+}
+````
+
+Dieser Überblick zeigt, wie die DDD-Komponenten in dieser Codebasis repräsentiert sind. Es ist wichtig zu beachten, dass die DDD-Strukturierung und -Nomenklatur je nach Anwendung und Team variieren kann.
+
+Sehen wir uns den Aufbau nun anhand bereits implementierter Funktionen an!
+- Bestellung aufgeben
+
+    Zunächst wird über einen Post-Request die Methode "placeNewOrder()" im OrderRestController aufgerufen:
+
+    ````java
+    //OrderRestController.java
+    @PostMapping("/orders/")
+    public ResponseEntity placeNewOrder(@RequestBody @Valid PlaceOrderCommand placeOrderCommand, BindingResult bindingResult) {
+
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handling place new order api request ...");
+
+        HashMap<String, String> errors = new HashMap<>();
+
+        if (bindingResult.hasErrors()) {
+            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Errors in placeOrderCommand detected!");
+            for (FieldError fieldError : bindingResult.getFieldErrors()) {
+                errors.put(fieldError.getField(), fieldError.getDefaultMessage());
+            }
+            throw new OrderPlacedFieldValidationException("Validation errors for order placement!", errors);
+        }
+
+        OrderResponse orderResponse = orderCommandService.handle(placeOrderCommand);
+
+        String resourceLocation = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString() + "/orders/" + orderResponse.orderID();
+        try {
+            return ResponseEntity.created(new URI(resourceLocation)).body(orderResponse);
+        } catch (URISyntaxException e) {
+            return ResponseEntity.noContent().build();
+        }
+    }
+    ````
+    Beinhaltet die mitgegebene Bestellung keine Fehler, so wird eine neue OrderResponse erstellt, indem die Methode "handle()" über die Port-Klasse "OrderCommandService" aufgerufen wird. Der dazugehörige Adapter, die ausimplementierte Klasse "OrderCommandServiceImpl", tritt dann in Aktion.
+
+    ````java
+    //OrderQueryServiceImpl.java
+    @Transactional
+    public OrderResponse handle(PlaceOrderCommand placeOrderCommand) {
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handle place order command ...");
+        List<String> errors = validatePlaceOrderCommand(placeOrderCommand);
+        if (errors.size() != 0) throw new OrderDataValidationException(errors);
+
+        List<LineItem> lineItemList = new ArrayList<>();
+        int i = 1;
+        for (CartItem cartItem : placeOrderCommand.cartItems()) {
+            lineItemList.add(new LineItem(
+                            new OrderPosition(i),
+                            new ProductNumber(cartItem.productNumber()),
+                            new Name(cartItem.productName()),
+                            new MonetaryAmount(new BigDecimal(cartItem.priceNet())),
+                            new Percentage(cartItem.tax()),
+                            new Amount(cartItem.amount())
+                    )
+            );
+            i++;
+        }
+
+        Order orderToInsert = new Order(
+                new OrderID("ONR" + UUID.randomUUID().toString().substring(0, 7)),
+                new CustomerData(
+                        new CustomerID(placeOrderCommand.customerID()),
+                        new Name(placeOrderCommand.customerFirstname()),
+                        new Name(placeOrderCommand.customerLastname()),
+                        new Email(placeOrderCommand.customerEmail()),
+                        placeOrderCommand.customerStreet(),
+                        placeOrderCommand.customerZipcode(),
+                        placeOrderCommand.customerCity(),
+                        placeOrderCommand.customerCountry()
+                ),
+                LocalDateTime.now(),
+                lineItemList,
+                OrderState.PLACED
+        );
+
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Insert new order in DB ...");
+        Optional<Order> orderOptional = this.orderRepository.insert(orderToInsert);
+
+        if (orderOptional.isPresent()) {
+            Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Publishing order placed domain event ...");
+            orderOutgoingMessageRelay.publish(new OrderPlacedEvent(OrderResponseMapper.toResponseFromDomain(orderOptional.get())));
+            return OrderResponseMapper.toResponseFromDomain(orderOptional.get());
+        } else {
+            throw new OrderPlacementNotSuccessfullException("OrderQueryServiceImpl: Order could not be placed!");
+        }
+    }
+    ````
+    Zunächst wird wieder überprüft, ob die Bestellung Fehler beinhaltet. Ist dies nicht der Fall, werden neue LineItems erstellt (pro bestelltem Artikel ein LineItem). Anschließend wird eine neue Bestellung (DDD-Bestandteil Aggregates - darin werden die ValueObjects verwendet) inkl. neuem Kunden, den zuvor erstellten LineItems und dem Status "OrderState.PLACED" erstellt. Die neue Bestellung wird in die Datenbank eingefügt und in ein Optional gespeichert. Hat das Einfügen in die Datenbank funktioniert und das Optional "isPresent()", wird die Bestellung veröffentlicht und an den Aufrufer zurückgegeben.
+
+    ````java
+    //OrderRepositoryImpl.java
+    @Override
+    public Optional<Order> insert(Order order) {
+        if (order == null) throw new IllegalArgumentException("Order to be inserted must not be null!");
+        OrderDbEntity orderDbEntity = DbOrderMapperService.toOrm(order);
+        OrderDbEntity insertedEntity = orderJPARepository.save(orderDbEntity);
+        if (insertedEntity == null) return Optional.empty();
+        return Optional.of(DbOrderMapperService.toDomain(insertedEntity));
+    }
+    ````
+    Es wird oben wieder ein Adapter über den Port "OrderOutgoingMessageRelay" aufgerufen.
+    ````java
+    //OrderOutgoingSpringMessageRelayImpl.java
+    @Override
+    public void publish(final OrderPlacedEvent orderPlacedEvent) {
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handling order placed domain event published for order# " + orderPlacedEvent.orderResponse().orderID());
+        OrderPlacedSpringEvent orderPlacedSpringEvent = new OrderPlacedSpringEvent(this, orderPlacedEvent.orderResponse());
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Publishing order placed spring event for order# " + orderPlacedEvent.orderResponse().orderID());
+        applicationEventPublisher.publishEvent(orderPlacedSpringEvent);
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Order placed spring event for order# " + orderPlacedEvent.orderResponse().orderID() + " published!");
+
+    }
+    ````
+
+- Bestellung auf bezahlt setzen
+
+    ````java
+    //OrderRestController.java
+    @PostMapping("/orders/checkpayment/{orderid}")
+        public ResponseEntity validatePaymentForOrderWithId(@PathVariable String orderid) {
+            Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handling check payment for order api request ...");
+            this.orderCommandService.handle(new OrderPaymentCheckCommand(orderid));
+            return ResponseEntity.accepted().body("Order payment check executed. Order payment ok!");
+        }
+    ````
+    Um die Bestellung auf bezahlt zu setzen, muss zunächst wieder ein HTTP-Request abgesetzt werden, indem die Bezahlung überprüft wird. Das Prüfen der Bezahlung wird wieder an den Port "OrderCommandService" und damit an den Adapter "OrderCommandServiceImpl" übergeben.
+
+    ````java
+    //OrderCommandServiceImpl.java
+    @Override
+    @Transactional
+    public void handle(OrderPaymentCheckCommand orderPaymentCheckCommand) throws OrderPaymentCheckFailedException {
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handling order payment check command ...");
+        if (orderPaymentCheckCommand == null)
+            throw new OrderPaymentCheckFailedException("Empty command for order payment check!");
+        if (!OrderID.isValid(orderPaymentCheckCommand.orderID()))
+            throw new OrderPaymentCheckFailedException("Order ID for order payment check not valid!");
+        Optional<Order> optionalOrderToCheck = this.orderRepository.getById(new OrderID(orderPaymentCheckCommand.orderID()));
+        if (optionalOrderToCheck.isPresent()) {
+            Order order = optionalOrderToCheck.get();
+            try {
+                order.orderStateTransitionTo(OrderState.PAYMENT_VERIFIED);
+                this.orderRepository.updateOrderWithNewState(order);
+                this.orderOutgoingMessageRelay.publish(new OrderPaymentValidatedEvent(OrderResponseMapper.toResponseFromDomain(order)));
+                Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Payment validated event published!");
+            } catch (OrderStateChangeNotPossibleException orderStateChangeNotPossibleException) {
+                throw new OrderPaymentCheckFailedException("Order payment check not possible. Order in wrong state! " + orderStateChangeNotPossibleException.getMessage());
+            }
+        } else {
+            throw new OrderPaymentCheckFailedException("Order with Id " + orderPaymentCheckCommand.orderID() + " not found for payment check!");
+        }
+    }
+    ````
+    Es wird geprüft, ob eine Bezahlung vorhanden ist und ob die Bezahlung gültig ist. Ist dies der Fall, wird die Bestellung aus der Datenbank geholt, geprüft, ob die Bestellung vorhanden ist und anschließend wird die Bestellung wieder in das DDD-Aggregat "Order" gespeichert. Nun wird versucht, den Zustand auf "PAYMENT_VERIFIED" zu setzen, die Bestellung in der Datenbank zu aktualisieren und ein neues Event wird abgesetzt.
+
+    ````java
+    //OrderRepositoryImpl.java
+    @Override
+    public void updateOrderWithNewState(Order order) { //first read the order, then change the entity object, then persist the order with save-call (transaction management included)
+        Optional<OrderDbEntity> optOrderDbEntity = this.orderJPARepository.findById(order.getOrderID().id());
+        if (optOrderDbEntity.isPresent()) {
+            OrderDbEntity orderDbEntity = optOrderDbEntity.get();
+            orderDbEntity.setState(order.getState());//set state
+            //further field could be updated if necessary (in further methods or in one Method containing all changes)
+            this.orderJPARepository.save(orderDbEntity);
+        }
+
+    }
+    ````
+
+- Packliste generieren
+
+    ````java
+    //PackingRestController.java
+    @PostMapping("/setPackedForPacking/{packingItemId}")
+    public void setPackingItemPackedForPacking(@PathVariable Long packingItemId) {
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handling packing for item# " + packingItemId);
+
+        Optional<PackingItem> optionalPackingItem = this.packingItemRepository.findById(packingItemId);
+        if (optionalPackingItem.isPresent()) {
+            PackingItem packingItem = optionalPackingItem.get();
+            packingItem.setPacked(true);
+            packingItemRepository.save(packingItem);
+
+            Long packingId = packingItem.getPacking().getId();
+
+            Optional<Packing> packing = this.packingRepository.findById(packingId);
+
+            boolean allpaked = true;
+            for (PackingItem item : packing.get().getPackingItemList()) {
+                if (!item.isPacked()) allpaked = false;
+            }
+            if (allpaked) {
+                Logger.getLogger(this.getClass().getName()).log(Level.INFO, "All items for order# " + packing.get().getOrderId() + "packed. Publishing event ...");
+                this.stockMessagePublisher.publishOrderPackedSpringEventForOrderId(packing.get().getOrderId());
+            }
+        }
+    }
+    ````
+
+
+- Packlistenitems abhaken
 
 2. Bestellung auf IN_DELIVERY setzen wenn alle Packlistenitems gepackt sind
     - Dokumentation (texthelle Beschreibung, Codeauszüge, Diagramme, C4-Diagramme, Klassendiagramme) der "Architektur" von Stockmanagement anhand der gegebenen Anwendungsfälle, die schon implementiert sind:
