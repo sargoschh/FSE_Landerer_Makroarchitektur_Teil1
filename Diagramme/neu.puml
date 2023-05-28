@@ -1,0 +1,475 @@
+@startuml
+
+package at.kolleg.erplite {
+    package customermanagement {
+        package appservice {
+            class AddressDto {
+
+            }
+
+            class CustomerDto {
+
+            }
+
+            class DtoMapper {
+
+            }
+        }
+
+        package db {
+            class AddressDbEntity {
+
+            }
+
+            class CustomerDbEntity {
+
+            }
+
+            class CustomerJPARepository {
+
+            }
+
+            class CustomerRepositoryImpl {
+
+            }
+
+            class DbMapperService {
+
+            }
+        }
+
+        package domain {
+            class Address {
+
+            }
+
+            class Customer {
+
+            }
+
+            class CustomerID {
+
+            }
+        }
+
+        package ports {
+            package in {
+                class CustomerCommandsService {
+
+                }
+
+                class CustomerQueriesService {
+
+                }
+            }
+
+            package out {
+                class CustomerRepository {
+
+                }
+            }
+        }
+
+        package usecases {
+            package commands {
+                class AddCustomerAddressCommand {
+
+                }
+
+                class CustomerCommandServiceImpl {
+
+                }
+
+                class CustomerCreationCommand {
+
+                }
+
+                class CustomerDeleteCommand {
+
+                }
+
+                class CustomerUpdateCommand {
+
+                }
+            }
+
+            package events {
+                class CustomerCreatedEvent {
+
+                }
+            }
+
+            class CustomerQueryServiceService {
+
+            }
+        }
+    }
+
+    package ordermanagement {
+        package api {
+            class ApiErrorResponse {
+
+            }
+
+            class ApiValidationErrorResponse {
+
+            }
+
+            class ExceptionRestController {
+
+            }
+
+            class OrderPlacedFieldValidationException {
+
+            }
+
+            class OrderRestController {
+                + placeNewOrder(placeOrderCommand: PlaceOrderCommand): ResponseEntity
+                + processPayment(orderPaymentCheckCommand: OrderPaymentCheckCommand): ResponseEntity
+                + getAllOrdersSortedAndPaged(query: GetAllOrdersSortedAndPagedQuery): List<OrderResponse>
+                + getOrderById(query: GetOrderByIdQuery): OrderResponse
+            }
+        }
+
+        package db {
+            class DbOrderMapperService {
+
+            }
+
+            class LineItemDbEntity {
+
+            }
+
+            class OrderCustomerDetailsDbEntity {
+                + OrderCustomerDetailsDbEntity(customerId: String, firstname: String, lastname: String, email: String, street: String, zipcode: String, city: String, country: String)
+            }
+
+            class OrderDbEntity {
+                + OrderDbEntity(orderID: String, orderCustomerDetails: OrderCustomerDetailsDbEntity, date: LocalDateTime, state: OrderState, taxTotal: BigDecimal, netTotal: BigDecimal, grossTotal: BigDecimal)
+            }
+
+            interface OrderJPARepository {
+
+            }
+
+            class OrderRepositoryImpl {
+                - orderJPARepository: OrderJPARepository
+                + insert(order: Order): Optional<Order>
+                + getById(id: OrderID): Optional<Order>
+                + getAll(): List<Order>
+                + deleteById(id: OrderID): void
+                + getAllSortedAndPaged(page: int, pageSize: int, sortedBy: String): List<Order>
+                + updateOrderWithNewState(order: Order): void
+            }
+        }
+
+        package domain {
+            package domainevents {
+                class OrderPackageEvent {
+
+                }
+
+                class OrderPaymentValidatedEvent {
+
+                }
+
+                class OrderPlacedEvent {
+
+                }
+
+                class OrderStateChangedEvent {
+
+                }
+            }
+
+            package valueobjects {
+                class Amount {
+
+                }
+
+                class Email {
+
+                }
+
+                class MonetaryAmount {
+
+                }
+
+                class Name {
+
+                }
+
+                class OrderID {
+
+                }
+
+                class OrderPosition {
+
+                }
+
+                enum OrderState {
+                    PLACED, PAYMENT_VERIFIED, PREPARING_FOR_DELIVERY, IN_DELIVERY, DELIVERED, CANCELED
+                }
+
+                class Percentage {
+
+                }
+
+                class ProductNumber {
+
+                }
+            }
+
+            class CustomerData {
+
+            }
+
+            class LineItem {
+
+            }
+
+            class Order {
+                + Order(orderID: OrderID, customerData: CustomerData, date: LocalDateTime, lineItems: List<LineItem>, status: OrderState)
+                + getLineItems(): List<LineItem>
+                + orderStateTransitionTo(newState: OrderState): void
+            }
+        }
+
+        package messaging.spring {
+            class IncomingOrderPackedSpringEventHandler {
+
+            }
+
+            class OrderOutgoingSpringMessageReplayImpl {
+
+            }
+        }
+
+        package ports {
+            package in {
+                interface OrderCommandService {
+
+                }
+
+                interface OrderIncommingMessagePort {
+
+                }
+
+                interface OrderQueryService {
+
+                }
+            }
+
+            package out {
+                interface BaseRepository {
+
+                }
+
+                interface OrderOutgoingMessageRelay {
+
+                }
+
+                interface OrderRepository {
+
+                }
+            }
+        }
+
+        package services {
+            package exceptions {
+                class OrderDateValidationException {
+
+                }
+
+                class OrderPaymentCheckFailedException {
+
+                }
+
+                class OrderPlacementNotSucessfullException {
+
+                }
+
+                class OrderStateChangeNotPossibleException {
+
+                }
+
+                class OrderWithGivenIDNotFoundException {
+
+                }
+            }
+
+            package mapper {
+                class OrderResponseMapper {
+
+                }
+            }
+
+            class OrderCommandServiceImpl {
+                - orderRepository: OrderRepository
+                - orderOutgoingMessageRelay: OrderOutgoingMessageRelay
+                + handle(placeOrderCommand: PlaceOrderCommand): OrderResponse
+                + handle(orderPaymentCheckCommand: OrderPaymentCheckCommand): void
+                - validatePlaceOrderCommand(placeOrderCommand: PlaceOrderCommand): List<String>
+            }
+
+            class OrderIncommingMessagePortImpl {
+
+            }
+
+            class OrderQueryServiceImpl {
+
+            }
+        }
+    }
+
+    package sharedkernel {
+        package commands {
+            class CancelOrderCommand {
+
+            }
+
+            class OrderPaymentCheckCommand {
+
+            }
+
+            class PlaceOrderCommand {
+
+            }
+        }
+
+        package dtos {
+            class CartItem {
+
+            }
+
+            class LineItemResponse {
+
+            }
+
+            class OrderResponse {
+                + OrderResponse(orderID: String, customerID: String, customerFirstname: String, customerLastname: String, customerEmail: String, customerStreet: String, customerZipcode: String, customerCity: String, customerCountry: String, orderLineItems: List<LineItemResponse>, state: String, taxTotal: double, netTotal: double, grossTotal: double, date: String)
+            }
+        }
+
+        package events {
+            class OrderPackedSpringEvent {
+
+            }
+
+            class OrderPaymentValidatedSpringEvent {
+
+            }
+
+            class OrderPlacedSpringEvent {
+
+            }
+        }
+
+        package marker {
+            interface AdapterMarker {
+
+            }
+
+            interface AggregateMaker {
+
+            }
+
+            interface DBEntityMarker {
+
+            }
+
+            interface DomainEntityMarker {
+
+            }
+
+            interface DomainServiceMarker {
+
+            }
+
+            interface InputPortMarker {
+
+            }
+
+            interface OutputPortMarker {
+
+            }
+
+            interface RepositoryMarker {
+
+            }
+
+            interface UseCaseMarker {
+
+            }
+
+            interface ValueObjectMarker {
+
+            }
+        }
+
+        package queries {
+            class GetAllOrdersSortedAndPagedQuery {
+
+            }
+
+            class GetOrderByIdQuery {
+
+            }
+        }
+    }
+
+    package stockmanagement {
+        package adapter {
+            class PackingRestController {
+
+            }
+
+            class StockIncomingMessageHandler {
+
+            }
+
+            class StockMessagePublisher {
+
+            }
+        }
+
+        package business {
+            class DeliveryData {
+
+            }
+
+            class Packing {
+
+            }
+
+            class PackingItem {
+
+            }
+        }
+
+        package db {
+            interface PackingItemRepository {
+
+            }
+
+            interface PackingRepository {
+
+            }
+        }
+    }
+
+    class ErpliteApplication {
+
+    }
+}
+
+
+
+
+@enduml
+
+OrderRestController (placeNewOrder())
+OrderPlacedFieldValidationException
+OrderResponse
+OrderCommandServiceImpl (handle())
+PlaceOrderCommand

@@ -1,0 +1,61 @@
+@startuml GrowManager_C4Container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+' uncomment the following line and comment the first to use locally
+' !include C4_Container.puml
+!include FONTAWESOME/server.puml
+!include DEVICONS/database.puml
+!include FONTAWESOME/server.puml
+!include DEVICONS/bootstrap.puml
+!include DEVICONS/wordpress.puml
+
+LAYOUT_WITH_LEGEND()
+
+title GrowManager C4Container-Diagramm
+
+SHOW_PERSON_OUTLINE()
+Person(kunde, Kunde)
+Person(admin, Administrator)
+Person(drittsystem, Drittsystem)
+
+System_Boundary(erpliteApplication, "ErpliteApplication ") {
+    Container(customermanagement, "Customermanagement", "Hauptmodul", "Verwaltet die Logik im Bezug auf die Kunden")
+    Container(ordermanagement, "Ordermanagement", "Hauptmodul", "Verwaltet die Logik im Bezug auf die Bestellungen")
+    Container(stockmanagement, "Stockmanagement", "Hauptmodul", "Verwaltet die Logik im Bezug auf das Lager")
+    Container(sharedkernel, "Sharedkernel", "DDD-Modul", "Stellt Funktionen für die Hauptmodule bereit")
+    }
+
+ContainerDb(database, "Datenbank", "H2", "Speichert die Inhalte der Applikation sowie die Informationen der Kunden, Bestellungen und der Lagerware", "database")
+
+System_Ext(host, "Server", "Hostet das System", "server")
+
+Rel(stockmanagement, database, "JPA", "Speichert und liest Daten aus/auf Datenbank")
+Rel(ordermanagement, database, "JPA", "Speichert und liest Daten aus/auf Datenbank")
+Rel(customermanagement, database, "JPA", "Speichert und liest Daten aus/auf Datenbank")
+
+Rel(stockmanagement, sharedkernel, " ", "Verwendet Funktionalitäten")
+Rel(ordermanagement, sharedkernel, " ", "Verwendet Funktionalitäten")
+Rel(customermanagement, sharedkernel, " ", "Verwendet Funktionalitäten")
+
+Rel(erpliteApplication, host, "Gehostet von")
+Rel(database, host, "Gehostet von")
+
+Rel(kunde, erpliteApplication, "HTTP", "verwendet")
+Rel(admin, erpliteApplication, "HTTP", "verwendet")
+Rel(drittsystem, erpliteApplication, "HTTP", "verwendet")
+
+
+@enduml
+
+' C4-Container-Diagramm: Auf dieser Ebene würden Sie die drei Hauptmodule 
+' Ihrer Anwendung - "customermanagement", "ordermanagement" und "stockmanagement" - 
+' als separate Container darstellen. Jeder dieser Container würde seine eigenen 
+' Eingabe- und Ausgabeports haben, die die Interaktionen mit den anderen Teilen 
+' des Systems darstellen. Zudem könnten Sie Ihre Datenbanken oder andere 
+' Speichersysteme darstellen.
+
+' Als eigener Container: Sie könnten "sharedkernel" als eigenen Container darstellen, 
+' der von den anderen Containern ("customermanagement", "ordermanagement", "stockmanagement") 
+' verwendet wird. Das würde klarstellen, dass es sich um gemeinsam genutzten Code handelt, 
+' der von den verschiedenen Modulen Ihrer Anwendung verwendet wird.

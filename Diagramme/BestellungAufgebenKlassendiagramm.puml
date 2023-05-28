@@ -1,0 +1,150 @@
+@startuml
+
+
+package at.kolleg.erplite.customermanagement.domain {
+  class CustomerID
+}
+
+package at.kolleg.erplite.ordermanagement.domain {
+  class CustomerData
+  class LineItem
+  class Order
+  enum OrderState
+}
+
+package at.kolleg.erplite.ordermanagement.domain.domainevents {
+  class OrderPaymentValidatedEvent
+  class OrderPlacedEvent
+}
+
+package at.kolleg.erplite.ordermanagement.domain.valueobjects {
+  class MonetaryAmount
+  class OrderID
+  class OrderPosition
+  class ProductNumber
+  class Name
+  class Percentage
+  class Amount
+  class Email
+}
+
+package at.kolleg.erplite.ordermanagement.ports.in {
+  interface OrderCommandService
+  interface OrderQueryService
+}
+
+package at.kolleg.erplite.ordermanagement.ports.out {
+  interface OrderOutgoingMessageRelay
+  interface OrderRepository
+}
+
+package at.kolleg.erplite.ordermanagement.services.exceptions {
+  class OrderDataValidationException
+  class OrderPaymentCheckFailedException
+  class OrderPlacementNotSuccessfullException
+  class OrderStateChangeNotPossibleException
+}
+
+package at.kolleg.erplite.ordermanagement.services.mapper {
+  class OrderResponseMapper
+}
+
+package at.kolleg.erplite.sharedkernel.commands {
+  class OrderPaymentCheckCommand
+  class PlaceOrderCommand
+}
+
+package at.kolleg.erplite.sharedkernel.dtos {
+  class CartItem
+  class OrderResponse
+  class LineItemResponse
+}
+
+package at.kolleg.erplite.ordermanagement.db {
+  class OrderRepositoryImpl
+  class OrderJPARepository
+  class OrderDbEntity {
+  + OrderDbEntity(orderID: String, orderCustomerDetails: OrderCustomerDetailsDbEntity, date: LocalDateTime, state: OrderState, taxTotal: BigDecimal, netTotal: BigDecimal, grossTotal: BigDecimal)
+}
+  class OrderCustomerDetailsDbEntity {
+  + OrderCustomerDetailsDbEntity(customerId: String, firstname: String, lastname: String, email: String, street: String, zipcode: String, city: String, country: String)
+}
+}
+
+
+
+class OrderRestController {
+  + placeNewOrder(placeOrderCommand: PlaceOrderCommand): ResponseEntity
+  + processPayment(orderPaymentCheckCommand: OrderPaymentCheckCommand): ResponseEntity
+  + getAllOrdersSortedAndPaged(query: GetAllOrdersSortedAndPagedQuery): List<OrderResponse>
+  + getOrderById(query: GetOrderByIdQuery): OrderResponse
+}
+
+class OrderCommandServiceImpl {
+  - orderRepository: OrderRepository
+  - orderOutgoingMessageRelay: OrderOutgoingMessageRelay
+  + handle(placeOrderCommand: PlaceOrderCommand): OrderResponse
+  + handle(orderPaymentCheckCommand: OrderPaymentCheckCommand): void
+  - validatePlaceOrderCommand(placeOrderCommand: PlaceOrderCommand): List<String>
+}
+
+class OrderRepositoryImpl {
+  - orderJPARepository: OrderJPARepository
+  + insert(order: Order): Optional<Order>
+  + getById(id: OrderID): Optional<Order>
+  + getAll(): List<Order>
+  + deleteById(id: OrderID): void
+  + getAllSortedAndPaged(page: int, pageSize: int, sortedBy: String): List<Order>
+  + updateOrderWithNewState(order: Order): void
+}
+
+interface OrderJPARepository
+
+
+
+
+
+enum OrderState {
+  PLACED, PAYMENT_VERIFIED, PREPARING_FOR_DELIVERY, IN_DELIVERY, DELIVERED, CANCELED
+}
+
+class Order {
+  + Order(orderID: OrderID, customerData: CustomerData, date: LocalDateTime, lineItems: List<LineItem>, status: OrderState)
+  + getLineItems(): List<LineItem>
+  + orderStateTransitionTo(newState: OrderState): void
+}
+
+class OrderResponse {
+  + OrderResponse(orderID: String, customerID: String, customerFirstname: String, customerLastname: String, customerEmail: String, customerStreet: String, customerZipcode: String, customerCity: String, customerCountry: String, orderLineItems: List<LineItemResponse>, state: String, taxTotal: double, netTotal: double, grossTotal: double, date: String)
+}
+
+class PlaceOrderCommand
+class OrderPaymentCheckCommand
+class GetAllOrdersSortedAndPagedQuery
+class GetOrderByIdQuery
+class ResponseEntity
+
+OrderCommandService <|.. OrderRestController
+OrderQueryService <|.. OrderRestController
+OrderRepository <|.. OrderRepositoryImpl
+OrderRestController -- PlaceOrderCommand
+OrderRestController -- OrderPaymentCheckCommand
+OrderRestController -- GetAllOrdersSortedAndPagedQuery
+OrderRestController -- GetOrderByIdQuery
+OrderRestController -- ResponseEntity
+OrderCommandService --> PlaceOrderCommand
+OrderCommandService --> OrderPaymentCheckCommand
+OrderQueryService --> GetAllOrdersSortedAndPagedQuery
+OrderQueryService --> GetOrderByIdQuery
+OrderCommandServiceImpl --> OrderRepository
+OrderRepositoryImpl --> OrderJPARepository
+OrderRepositoryImpl --> Order
+OrderRepositoryImpl --> OrderOutgoingMessageRelay
+OrderDbEntity --> OrderCustomerDetailsDbEntity
+OrderDbEntity --> OrderState
+OrderResponse --> LineItemResponse
+
+@enduml
+
+
+

@@ -1,0 +1,26 @@
+@startuml ErpliteApplication_C4Context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title ErpliteApplication C4Context-Diagramm
+
+SHOW_PERSON_OUTLINE()
+Person(kunde, Kunde)
+Person(admin, Administrator)
+Person(drittsystem, Drittsystem)
+
+System(system, "ErpliteApplication", "Plattform zur Verwaltung von Bestellungen")
+
+System_Ext(host, "Server", "Hostet das System")
+
+
+Rel_D(kunde, system, "verwendet")
+Rel_D(admin, system, "verwendet")
+Rel_D(drittsystem, system, "verwendet")
+Rel_D(system, host, "wird gehosted von")
+LAYOUT_WITH_LEGEND()
+@enduml
+
+'C4-Context-Diagramm: Hier wäre die gesamte "ErpliteApplication" Ihr System, 
+'das in Beziehung zu den externen Systemen und Benutzern steht. 
+'Sie könnten unterschiedliche Arten von Benutzern darstellen, 
+'die mit Ihrem System interagieren, wie z.B. Kunden, Administratoren, oder Drittsysteme.

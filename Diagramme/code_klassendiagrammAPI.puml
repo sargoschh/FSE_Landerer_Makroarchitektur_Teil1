@@ -1,0 +1,49 @@
+@startuml API Klassen-Diagram
+
+title API Klassen-Diagram
+
+class ApiErrorResponse {
+    -errorCode: String
+    -errorMessage: String
+}
+
+class ApiValidationErrorResponse {
+    -errorCode: String
+    -errorMessages: Map<String, String>
+}
+
+class ExceptionRestController {
+    +handle(OrderPlacementNotSuccessfullException): ResponseEntity<ApiErrorResponse>
+    +handle(OrderWithGivenIDNotFoundException): ResponseEntity<ApiErrorResponse>
+    +handle(IllegalArgumentException): ResponseEntity<ApiErrorResponse>
+    +handle(OrderDataValidationException): ResponseEntity<ApiErrorResponse>
+    +handle(OrderPlacedFieldValidationException): ResponseEntity<ApiValidationErrorResponse>
+    +handle(OrderPaymentCheckFailedException): ResponseEntity<ApiErrorResponse>
+}
+
+class OrderPlacedFieldValidationException {
+    -validationErrors: Map<String, String>
+    +getValidationErrors(): Map<String, String>
+}
+
+class OrderRestController {
+    -orderCommandService: OrderCommandService
+    -orderQueryService: OrderQueryService
+    +placeNewOrder(PlaceOrderCommand, BindingResult): ResponseEntity
+    +getAllOrders(): ResponseEntity<List<OrderResponse>>
+    +getAllOrdersSortedAndPaged(Optional<Integer>, Optional<Integer>, Optional<String>): ResponseEntity<List<OrderResponse>>
+    +getOrderWithId(String): ResponseEntity<OrderResponse>
+    +validatePaymentForOrderWithId(String): ResponseEntity
+}
+
+ExceptionRestController --> ApiErrorResponse
+ExceptionRestController --> ApiValidationErrorResponse
+ExceptionRestController --> OrderPlacedFieldValidationException
+OrderRestController --> OrderCommandService
+OrderRestController --> OrderQueryService
+ApiValidationErrorResponse --> OrderPlacedFieldValidationException : contains >
+OrderPlacedFieldValidationException --> ExceptionRestController
+OrderRestController ..> ExceptionRestController : uses >
+
+@enduml
+

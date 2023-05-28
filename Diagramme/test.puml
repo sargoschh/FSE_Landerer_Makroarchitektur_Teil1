@@ -1,0 +1,124 @@
+@startuml
+
+package at.kolleg.erplite.customermanagement.domain {
+  class CustomerID
+}
+
+package at.kolleg.erplite.ordermanagement.domain {
+  class CustomerData
+  class LineItem
+  class Order {
+    + Order(orderID: OrderID, customerData: CustomerData, date: LocalDateTime, lineItems: List<LineItem>, status: OrderState)
+    + getLineItems(): List<LineItem>
+    + orderStateTransitionTo(newState: OrderState): void
+  }
+  enum OrderState
+}
+
+package at.kolleg.erplite.ordermanagement.domain.domainevents {
+  class OrderPaymentValidatedEvent
+  class OrderPlacedEvent
+}
+
+package at.kolleg.erplite.ordermanagement.domain.valueobjects {
+  class MonetaryAmount
+  class OrderID
+  class OrderPosition
+  class ProductNumber
+  class Name
+  class Percentage
+  class Amount
+  class Email
+}
+
+package at.kolleg.erplite.ordermanagement.ports.in {
+  interface OrderCommandService {
+    + handle(placeOrderCommand: PlaceOrderCommand): OrderResponse
+    + handle(orderPaymentCheckCommand: OrderPaymentCheckCommand): void
+  }
+  interface OrderQueryService {
+    + getAllOrdersSortedAndPaged(query: GetAllOrdersSortedAndPagedQuery): List<OrderResponse>
+    + getOrderById(query: GetOrderByIdQuery): OrderResponse
+  }
+}
+
+package at.kolleg.erplite.ordermanagement.ports.out {
+  interface OrderOutgoingMessageRelay {
+    + publish(event: OrderPaymentValidatedEvent): void
+    + publish(event: OrderPlacedEvent): void
+  }
+  interface OrderRepository {
+    + insert(order: Order): Optional<Order>
+    + getById(id: OrderID): Optional<Order>
+    + getAll(): List<Order>
+    + deleteById(id: OrderID): void
+    + getAllSortedAndPaged(page: int, pageSize: int, sortedBy: String): List<Order>
+    + updateOrderWithNewState(order: Order): void
+  }
+}
+
+package at.kolleg.erplite.ordermanagement.services.exceptions {
+  class OrderDataValidationException
+  class OrderPaymentCheckFailedException
+  class OrderPlacementNotSuccessfullException
+  class OrderStateChangeNotPossibleException
+}
+
+package at.kolleg.erplite.ordermanagement.services.mapper {
+  class OrderResponseMapper {
+    + toResponseFromDomain(order: Order): OrderResponse
+  }
+}
+
+package at.kolleg.erplite.sharedkernel.commands {
+  class OrderPaymentCheckCommand
+  class PlaceOrderCommand {
+    + PlaceOrderCommand(customerID: String, customerFirstname: String, customerLastname: String, customerEmail: String, customerStreet: String, customerZipcode: String, customerCity: String, customerCountry: String, cartItems: List<CartItem>)
+  }
+}
+
+package at.kolleg.erplite.sharedkernel.dtos {
+  class CartItem
+  class OrderResponse
+  class LineItemResponse
+}
+
+package at.kolleg.erplite.ordermanagement.db {
+  class OrderRepositoryImpl {
+    + insert(order: Order): Optional<Order>
+    + getById(id: OrderID): Optional<Order>
+    + getAll(): List<Order>
+    + deleteById(id: OrderID): void
+    + getAllSortedAndPaged(page: int, pageSize: int, sortedBy: String): List<Order>
+    + updateOrderWithNewState(order: Order): void
+  }
+  class OrderJPARepository {
+    + updateOrderState(orderid:  String, newState: OrderState): void
+  }
+}
+
+package at.kolleg.erplite.ordermanagement.db {
+  class OrderRepositoryImpl {
+    + insert(order: Order): Optional<Order>
+    + getById(id: OrderID): Optional<Order>
+    + getAll(): List<Order>
+    + deleteById(id: OrderID): void
+    + getAllSortedAndPaged(page: int, pageSize: int, sortedBy: String): List<Order>
+    + updateOrderWithNewState(order: Order): void
+  }
+  class OrderJPARepository {
+    + updateOrderState(orderid: String, newState: OrderState): void
+  }
+  class OrderDbEntity {
+    + OrderDbEntity(orderID: String, orderCustomerDetails: OrderCustomerDetailsDbEntity, date: LocalDateTime, lineItems: List<LineItemDbEntity>, state: OrderState, taxTotal: BigDecimal, netTotal: BigDecimal, grossTotal: BigDecimal, version: Long)
+  }
+  class OrderCustomerDetailsDbEntity {
+    + OrderCustomerDetailsDbEntity(customerId: String, firstname: String, lastname: String, email: String, street: String, zipcode: String, city: String, country: String)
+  }
+}
+
+
+
+@enduml
+
+
