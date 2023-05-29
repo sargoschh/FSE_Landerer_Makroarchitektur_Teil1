@@ -12,44 +12,24 @@
 
 title Stockmanagement C4Component-Diagram
 
-Container(stockmanagement, "Stockmanagement", "Hauptmodul", "Verwaltet die Logik im Bezug auf das Lager")
+Container(ordermanagement, "Ordermanagement", "Hauptmodul", "Verwaltet die Logik im Bezug auf die Bestellungen")
 Container(sharedkernel, "Sharedkernel", "DDD-Modul", "Stellt Funktionen für die Hauptmodule bereit")
-Container(customermanagement, "Customermanagement", "Hauptmodul", "Verwaltet die Logik im Bezug auf die Kunden")
 ContainerDb(database, "Datenbank", "H2", "Speichert die Inhalte der Applikation sowie die Informationen der Kunden, Bestellungen und der Lagerware", "database")
 
-Container_Boundary(Ordermanagement, "Ordermanagement") {
+Container_Boundary(stockmanagement, "Stockmanagement") {
     
-    Component(api, "API", "Order Controller", "Komponenten werden bereitgestellt, die für die Verwaltung der API-Endpunkte, die Verarbeitung von Ausnahmen und die Rückgabe angemessener Fehlerantworten verantwortlich sind.")
-    Component(db, "DB", "Datenbank-Entitäten", "Beinhaltet die Datenbank-Entitäten für Bestellungen und deren Details, den Service für die Umwandlung zwischen Datenbank- und Domänen-Entitäten und die JPA-Repository-Implementierung zur Durchführung von Datenzugriffsoperationen.")
-    Component(service, "Service", "Anwendungsdienste", "Enthält die Implementierungen der Anwendungsdienste für das Ausführen von Befehlen und Abfragen auf Bestellungen, das Empfangen von Nachrichten, das Mapping von Antworten sowie benutzerdefinierte Ausnahmen, die spezifische Fehlerbedingungen repräsentieren.")
-    Component(domain, "Datenmodelle", "Entity-Klassen", "Enthält die Hauptgeschäftslogik und Datenmodelle der Anwendung, einschließlich der wichtigen Geschäftsereignisse, Wertobjekte und Hauptentitäten wie Kunde, Artikel und Bestellung")
-    Component(ports, "Ports", "Ports and Adapters", "Definiert die Grenzen und Verträge für eingehende und ausgehende Interaktionen der Anwendung, einschließlich ausführenden und lesenden Operationen auf Bestellungen sowie eingehenden und ausgehenden Nachrichten.")
-    Component(messaging, "Messaging Spring", "Nachrichtenereignisse", "Enthält die Komponenten für das Handling eingehender und ausgehender Nachrichtenereignisse in der Anwendung, insbesondere bezogen auf Bestellungen, unter Verwendung des Spring Frameworks.")
-
-    Rel(ports, api, "provides functions")
-    Rel(domain, db, "provides functions")
-    Rel(ports, db, "provides functions")
-    Rel(sharedkernel, domain, "provides functions")
-    Rel(customermanagement, domain, "provides functions")
-    Rel(service, domain, "provides functions")
-    Rel(domain, messaging, "provides functions")
-    Rel(ports, domain, "provides functions")
-    Rel(sharedkernel, domain, "provides functions")
-    Rel(service, ports, "provides functions")
-    Rel(sharedkernel, ports, "provides functions")
-    Rel(domain, ports, "provides functions")
-    Rel(domain, service, "provides functions")
-    Rel(sharedkernel, service, "provides functions")
-    Rel(ports, service, "provides functions")
-
+    Component(adapter, "Adapter", "Kommunikation", "Verwaltet die Kommunikation zwischen dem System und externen Schnittstellen durch HTTP und Nachrichtenverarbeitung.")
+    Component(business, "Business", "Geschäftsmodelle & Logik", "Enthält Geschäftsmodelle und Logik für Verpackung und Lieferung.")
+    Component(db, "DB", "Datenzugriffs-Interfaces", "Stellt Datenzugriffs-Interfaces für Verpackungs- und Verpackungsartikel bereit.")
     
+    ordermanagement ..> adapter : sends Events
+    adapter ..> ordermanagement : sends Events
+    Rel(business, adapter, "provides functions")
+    Rel(db, adapter, "provides functions")
+    Rel(sharedkernel, adapter, "provides functions")
+    Rel(business, db, "provides functions")
+
     Rel(db, database, "JPA", "Speichert und liest Daten aus/auf Datenbank")
-
-    Rel(api, sharedkernel, "provides functions")
 }
-
-    Rel(sharedkernel, stockmanagement, "provides functions")
-    Rel(sharedkernel, customermanagement, "provides functions")
-    Rel(domain, customermanagement, "provides functions")
 
 @enduml

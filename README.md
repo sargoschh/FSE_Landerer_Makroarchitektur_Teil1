@@ -556,7 +556,7 @@ Sehen wir uns den Aufbau nun anhand bereits implementierter Funktionen an!
     }
     ````
 
-- Packliste generieren
+- Packliste generieren & Packingliste anlegen
 
     ````java
     //StockIncommingMessageHandler.java
@@ -602,7 +602,7 @@ Sehen wir uns den Aufbau nun anhand bereits implementierter Funktionen an!
 
     Wenn die Bestellung auf bezahlt gesetzt wird, das Event "OrderPaymentValidatedEvent" abgesetzt. Die Methode "onApplicationEvent()" aufgerufen. In dieser Methode werden die neue Bestellung sowie die bestellten Artikel zur PackingList hinzugefügt sowie die PackingList in die Datenbank gespeichert.
 
-- Packlistenitems abhaken
+- Packlistenitems abhaken & Packingitems als verpackt markieren
 
     ````java
     //PackingRestController.java
@@ -725,8 +725,42 @@ Sehen wir uns den Aufbau nun anhand bereits implementierter Funktionen an!
     ````
 
 2. Dokumentation (texthelle Beschreibung, Codeauszüge, Diagramme, C4-Diagramme, Klassendiagramme) der "Architektur" von Stockmanagement anhand der gegebenen Anwendungsfälle, die schon implementiert sind:
-    - Packingliste anlegen
-    - Packingitems als verpackt markieren
+
+Das C4-Context Diagramm und das C4-Container Diagramm sind ident mit dem Diagrammen vom Ordermanagement. Nun folgt das C4-Component Diagramm des Stockmanagements:
+
+![C4-ComponentStockmanagement](out/Diagramme/component_stockmanagement/Stockmanagement_C4ComponentBackend.png)
+
+Das vorliegende C4-Component-Diagramm beschreibt die Struktur des "Stockmanagement"-Systems und zeigt die verschiedenen Komponenten und deren Beziehungen zueinander.
+
+Zunächst gibt es drei "Container"-Elemente:
+
+- "Ordermanagement": Dies ist das Hauptmodul, das die Logik im Zusammenhang mit Bestellungen verwaltet.
+- "Sharedkernel": Ein Modul im Stil von Domain-Driven Design (DDD), das Funktionen für die Hauptmodule bereitstellt.
+- "Datenbank": Eine H2-Datenbank, die die Inhalte der Anwendung sowie Informationen über Kunden, Bestellungen und Lagerbestände speichert.
+
+Im "Stockmanagement" Container gibt es drei Komponenten:
+
+- "Adapter": Dieser kümmert sich um die Kommunikation zwischen dem System und externen Schnittstellen über HTTP und Nachrichtenverarbeitung. Er erhält Ereignisse vom "Ordermanagement" und sendet Ereignisse an das "Ordermanagement". Zudem nutzt er Funktionen, die von den Komponenten "Business", "DB" und "Sharedkernel" bereitgestellt werden.
+- "Business": Diese Komponente enthält Geschäftsmodelle und Logik für Verpackung und Lieferung. Sie stellt Funktionen für den "Adapter" und die "DB" bereit.
+- "DB": Dieses Modul stellt Datenzugriffs-Interfaces für Verpackungs- und Verpackungsartikel bereit. Es nutzt Funktionen, die von der "Business"-Komponente bereitgestellt werden und interagiert mit der Datenbank.
+
+Die "DB"-Komponente interagiert mit der "Datenbank"-Container, indem sie JPA (Java Persistence API) verwendet, um Daten zu speichern und von der Datenbank zu lesen. Die Beziehungen im Diagramm sind teilweise gestrichelt, was auf eine lose Kopplung oder eine asynchrone Kommunikation hinweisen kann.
+
+In Bezug auf Ports und Adapters und Domain-Driven Design (DDD) kann das gegebene "stockmanagement" Paket wie folgt betrachtet werden:
+
+- Adapter (Infrastructure Layer): Das Paket "adapter" repräsentiert die Adapter in der Architektur von Ports und Adapters. Adapter sind dafür verantwortlich, die Kommunikation zwischen der Anwendung und externen Agenten (wie Benutzerschnittstellen, Datenbanken oder externen Systemen) zu handhaben. In diesem Fall enthält das Paket "adapter" die Klassen PackingRestController, StockIncomingMessageHandler und StockMessagePublisher, die alle als Adapter dienen könnten, um mit verschiedenen externen Systemen zu kommunizieren.
+
+    ![AdapterStockmanagement](pics/AdapterStockmanagement.jpg)
+
+- Business (Domain Layer): Das Paket "business" repräsentiert die Domain Layer in DDD und die Anwendung in Ports und Adapters. Es enthält die Klassen DeliveryData, Packing und PackingItem, die wahrscheinlich Geschäftsobjekte oder Entitäten im Sinne von DDD repräsentieren. Diese Klassen kapseln die Geschäftslogik und Regeln der Anwendung.
+
+    ![DomainLayer](pics/DomainLayer.jpg)
+
+- Db (Infrastructure Layer): Das Paket "db" kann als Teil der Infrastrukturschicht in DDD und Ports und Adapters gesehen werden. Es enthält Interfaces PackingItemRepository und PackingRepository, die wahrscheinlich die Datenzugriffsfunktionen zur Interaktion mit einer Datenbank bereitstellen. In der Ports und Adapters Architektur könnten diese Interfaces als "Ports" fungieren, durch die die Anwendung mit der Datenbank kommuniziert.
+
+    ![PortsStockmanagement](pics/PortsStockmanagement.jpg)
+
+Da die Anwendungsfälle "Packingliste anlegen & Packingitems als verpackt markieren" eng mit dem Ordermanagement verbunden sind, wurden die Codebeispiele bereits weiter oben eingebaut.
 
 
 
