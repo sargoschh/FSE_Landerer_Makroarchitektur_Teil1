@@ -1,4 +1,4 @@
-@startuml Ordermanagement_C4ComponentBackend
+@startuml Stockmanagement_C4ComponentBackend
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
 !define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
 !define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
@@ -10,7 +10,7 @@
 !include DEVICONS/bootstrap.puml
 !include DEVICONS/wordpress.puml
 
-title Ordermanagement C4Component-Diagram
+title Stockmanagement C4Component-Diagram
 
 Container(stockmanagement, "Stockmanagement", "Hauptmodul", "Verwaltet die Logik im Bezug auf das Lager")
 Container(sharedkernel, "Sharedkernel", "DDD-Modul", "Stellt Funktionen für die Hauptmodule bereit")

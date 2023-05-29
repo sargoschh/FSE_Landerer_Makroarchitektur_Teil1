@@ -539,7 +539,7 @@ Sehen wir uns den Aufbau nun anhand bereits implementierter Funktionen an!
         }
     }
     ````
-    Es wird geprüft, ob eine Bezahlung vorhanden ist und ob die Bezahlung gültig ist. Ist dies der Fall, wird die Bestellung aus der Datenbank geholt, geprüft, ob die Bestellung vorhanden ist und anschließend wird die Bestellung wieder in das DDD-Aggregat "Order" gespeichert. Nun wird versucht, den Zustand auf "PAYMENT_VERIFIED" zu setzen, die Bestellung in der Datenbank zu aktualisieren und ein neues Event wird abgesetzt.
+    Es wird geprüft, ob eine Bezahlung vorhanden ist und ob die Bezahlung gültig ist. Ist dies der Fall, wird die Bestellung aus der Datenbank geholt, geprüft, ob die Bestellung vorhanden ist und anschließend wird die Bestellung wieder in das DDD-Aggregat "Order" gespeichert. Nun wird versucht, den Zustand auf "PAYMENT_VERIFIED" zu setzen, die Bestellung in der Datenbank zu aktualisieren und ein neues Event (OrderPaymentValidatedEvent) wird abgesetzt.
 
     ````java
     //OrderRepositoryImpl.java
@@ -557,6 +557,52 @@ Sehen wir uns den Aufbau nun anhand bereits implementierter Funktionen an!
     ````
 
 - Packliste generieren
+
+    ````java
+    //StockIncommingMessageHandler.java
+    @Override
+    @Async("threadPoolTaskExecutor")
+    public void onApplicationEvent(OrderPaymentValidatedSpringEvent event) {
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handling order payment validated spring event ...");
+
+        OrderResponse orderResponse = event.getOrderResponse();
+
+        Packing packingToSaveToDb =
+                Packing.builder()
+                        .id(null)
+                        .orderId(orderResponse.orderID())
+                        .deliveryData(new DeliveryData(
+                                        orderResponse.customerFirstname() + " " + orderResponse.customerLastname(),
+                                        orderResponse.customerStreet(),
+                                        orderResponse.customerZipcode(),
+                                        orderResponse.customerCity(),
+                                        orderResponse.customerCountry()
+                                )
+                        ).packingItemList(null) // List is generated down under
+                        .build();
+
+        List<PackingItem> packingItemList = new ArrayList<>();
+        for (LineItemResponse lineItemResponse : orderResponse.orderLineItems()) {
+            packingItemList.add(
+                    new PackingItem(
+                            null,
+                            lineItemResponse.productNumber(),
+                            lineItemResponse.productName(),
+                            lineItemResponse.amount(),
+                            false,
+                            packingToSaveToDb
+                    )
+            );
+        }
+        packingToSaveToDb.setPackingItemList(packingItemList);
+        this.packingRepository.save(packingToSaveToDb);
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "New packing list created and saved in db ...");
+    }
+    ````
+
+    Wenn die Bestellung auf bezahlt gesetzt wird, das Event "OrderPaymentValidatedEvent" abgesetzt. Die Methode "onApplicationEvent()" aufgerufen. In dieser Methode werden die neue Bestellung sowie die bestellten Artikel zur PackingList hinzugefügt sowie die PackingList in die Datenbank gespeichert.
+
+- Packlistenitems abhaken
 
     ````java
     //PackingRestController.java
@@ -586,11 +632,99 @@ Sehen wir uns den Aufbau nun anhand bereits implementierter Funktionen an!
     }
     ````
 
+    Um ein PackListItem abzuhaken, muss zunächst ein POST-Request auf "/setPackedForPacking/{packingItemId}" abgesetzt werden. Es wird dann die Methode "setPackingItemPackedForPacking()" aufgerufen. Das PackingItem wird aus der Datenbank geholt und auf Anwesenheit geprüft. Das PackingItem wird dann auf "setPacket(true)" gesetzt und wieder in die Datenbank gespeichert. Wenn alle PackingItems auf "packed" gesetzt sind, wird die Methode "publishOrderPackedSpringEventForOrderId()" aufgerufen.
 
-- Packlistenitems abhaken
+    ````java
+    //StockMessagePublisher.java
+    public void publishOrderPackedSpringEventForOrderId(String orderID) {
+        OrderPackedSpringEvent orderPackedSpringEvent = new OrderPackedSpringEvent(this, orderID);
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Publishing order fully packed event ...");
+        applicationEventPublisher.publishEvent(orderPackedSpringEvent);
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Order fully packed event published!");
+    }
+    ````
 
-2. Bestellung auf IN_DELIVERY setzen wenn alle Packlistenitems gepackt sind
-    - Dokumentation (texthelle Beschreibung, Codeauszüge, Diagramme, C4-Diagramme, Klassendiagramme) der "Architektur" von Stockmanagement anhand der gegebenen Anwendungsfälle, die schon implementiert sind:
+    In dieser Methode wird ein neues "OrderPackedSpringEvent()" erstellt und abgesetzt. 
+
+- Bestellung auf IN_DELIVERY setzen wenn alle Packlistenitems gepackt sind
+
+    ````java
+    //IncommingOrderPackedSpringEventHandler.java
+    @Override
+    @Async("threadPoolTaskExecutor")
+    public void onApplicationEvent(OrderPackedSpringEvent event) {
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Order packed event received for order# " + event.getOrderID());
+        this.orderIncomingMessagesPort.handle(new OrderPackedEvent(new OrderID(event.getOrderID())));
+    }
+    ````
+    Wenn das Event "OrderPackedSpringEvent()" abgesetzt wird, über die Klasse "IncomingOrderPackedSpringEventHandler", die den "ApplicationListener<'OrderPackedSpringEvent>" implementiert, aufgerufen. Die Methode "onApplicationEvent()" gibt das Event dann mit "orderIncommingMessagePort().handle()" an den Port "OrderIncommingMessagePort" weiter.
+
+    ````java
+    //OrderIncommingMessagePortImpl.java
+    @Transactional
+    public void handle(OrderPackedEvent orderPackedEvent) {
+        //Meterialize object into Memory, place changes, and forward the domain object to repository
+        //this ensures, that businesslogic will be executed und object is in consistent state.
+        Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Handling order packed event ...");
+        Optional<Order> optionalOrderToCheck = this.orderRepository.getById(orderPackedEvent.orderId());
+        if (optionalOrderToCheck.isPresent()) {
+            Order order = optionalOrderToCheck.get();
+            try {
+                order.orderStateTransitionTo(OrderState.PREPARING_FOR_DELIVERY);
+                this.orderRepository.updateOrderWithNewState(order);
+                Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Order state changed to preparing_for_delivery, changed order persisted!");
+            } catch (OrderStateChangeNotPossibleException orderStateChangeNotPossibleException) {
+                throw new OrderPaymentCheckFailedException("Order state change to preparing for delivery not possible! " + orderStateChangeNotPossibleException.getMessage());
+            }
+        } else {
+            throw new OrderWithGivenIDNotFoundException("Order with Id " + orderPackedEvent.orderId().id() + " not found for state change to preparing for delivery!");
+        }
+
+    }
+    ````
+
+    Hier wird die Bestellung, sollte sie vorhanden sein, auf "PREPARING_FOR_DELIVERY" gesetzt und mit aktuellem Status wieder in die Datenbank gespeichert.
+
+    Nach meiner Analyse kann ich jedoch nicht feststellen, dass die Bestellung an irgendeiner Stelle der Applikation auf "IN_DELIVERY" gesetzt.
+
+    ![OrderStateTransition](pics/OrderStateTransition.jpg)
+
+    Wie in dieser Abbildung ersichtlich ist, wird die Methode, die für das Ändern des Status verantwortlich ist, nur zweimal aufgerufen.
+
+    ````java
+    //Order.java
+    public void orderStateTransitionTo(OrderState newState) {
+        switch (newState) {
+            case CANCELED -> {
+                if (this.state == OrderState.IN_DELIVERY || this.state == OrderState.DELIVERED)
+                    throw new OrderStateChangeNotPossibleException("Order in State " + this.state + " cannot be canceled");
+                this.state = newState;
+            }
+            case PAYMENT_VERIFIED -> {
+                if (this.state != OrderState.PLACED)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state PLACED for transition to PAYMENT VERIFIED!");
+                this.state = newState;
+            }
+            case PREPARING_FOR_DELIVERY -> {
+                if (this.state != OrderState.PAYMENT_VERIFIED)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state PAYMENT VERIFED for transition to PREPARING FOR DELIVERY!");
+                this.state = newState;
+            }
+            case IN_DELIVERY -> {
+                if (this.state != OrderState.PREPARING_FOR_DELIVERY)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state PREPARING FOR DELIVERY for transition to IN DELIVERY!");
+                this.state = newState;
+            }
+            case DELIVERED -> {
+                if (this.state != OrderState.IN_DELIVERY)
+                    throw new OrderStateChangeNotPossibleException("Order must be in state IN DELIVERY for transition to DELIVERED!");
+                this.state = newState;
+            }
+        }
+    }
+    ````
+
+2. Dokumentation (texthelle Beschreibung, Codeauszüge, Diagramme, C4-Diagramme, Klassendiagramme) der "Architektur" von Stockmanagement anhand der gegebenen Anwendungsfälle, die schon implementiert sind:
     - Packingliste anlegen
     - Packingitems als verpackt markieren
 
